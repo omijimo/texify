@@ -6,14 +6,41 @@
   let latex: string | undefined;
   let loading = false;
 
-  function predict() {
+  let files: FileList;
+  let displayURI: string;
+
+  $: {
+    if (files !== undefined && files.length > 0) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        displayURI = e.target.result as string;
+      };
+      reader.readAsDataURL(files[0]);
+    }
+  }
+
+  let tab: "draw" | "upload" = "draw";
+
+  async function predict() {
     loading = true;
 
-    let canvas = document.getElementById("canvas") as HTMLCanvasElement;
+    if (tab === "draw") {
+      let canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
-    canvas.toBlob(async (blob) => {
+      canvas.toBlob(async (blob) => {
+        const formData = new FormData();
+        formData.append("image", blob);
+
+        const resp = await fetch("http://localhost:8000/image", {
+          method: "POST",
+          body: formData,
+        });
+        latex = await resp.text();
+        loading = false;
+      });
+    } else {
       const formData = new FormData();
-      formData.append("image", blob);
+      formData.append("image", files[0]);
 
       const resp = await fetch("http://localhost:8000/image", {
         method: "POST",
@@ -21,7 +48,7 @@
       });
       latex = await resp.text();
       loading = false;
-    });
+    }
   }
 </script>
 
@@ -33,9 +60,46 @@
     Easily convert handwritten math into <Katex math="\LaTeX" />.
   </p>
 
-  <div class="h-96 self-stretch bg-white shadow-lg rounded-lg">
-    <Canvas />
+  <div class="self-stretch flex gap-4">
+    <button
+      class={"flex-1 p-4 h-full rounded-lg shadow-lg transition-all " +
+        (tab === "draw"
+          ? "bg-blue-500 text-white"
+          : "bg-white hover:bg-blue-500 hover:shadow-xl hover:text-white")}
+      on:click={() => {
+        tab = "draw";
+      }}
+    >
+      Draw
+    </button>
+
+    <button
+      class={"flex-1 p-4 h-full rounded-lg shadow-lg transition-all " +
+        (tab === "upload"
+          ? "bg-blue-500 text-white"
+          : "bg-white hover:bg-blue-500 hover:shadow-xl hover:text-white")}
+      on:click={() => {
+        tab = "upload";
+      }}
+    >
+      Upload
+    </button>
   </div>
+
+  {#if tab === "draw"}
+    <div class="h-96 self-stretch bg-white shadow-lg rounded-lg">
+      <Canvas />
+    </div>
+  {:else}
+    <div
+      class="self-stretch min-h-[12em] p-4 rounded-lg shadow-lg transition-all bg-white flex flex-col items-center justify-center"
+    >
+      <input type="file" bind:files />
+      {#if displayURI}
+        <img src={displayURI} alt="Math" />
+      {/if}
+    </div>
+  {/if}
 
   <div class="self-stretch flex gap-4">
     <div
